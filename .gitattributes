@@ -1,0 +1,15 @@
+# Git attributes for wordcount-distributed
+# Enforce Unix line endings (LF) for shell scripts to prevent CRLF issues on Windows
+
+# Shell scripts must use LF line endings
+*.sh text eol=lf
+
+# Java source files
+*.java text eol=lf
+
+# Text files should be normalized
+*.txt text
+*.md text
+
+# Makefile must use LF
+Makefile text eol=lf
