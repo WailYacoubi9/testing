@@ -1,2 +1,2 @@
-# Release v1.0 - Distributed WordCount System
+# Add build system and Makefile
 # File: Makefile
