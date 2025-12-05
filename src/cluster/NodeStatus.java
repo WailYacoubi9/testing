@@ -1,6 +1,1 @@
-package cluster;
-
-public enum NodeStatus {
-    FREE,
-    OCCUPIED
-}
+# Implement ComputeNode and NodeStatus
