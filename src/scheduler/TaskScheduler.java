@@ -1,2 +1,2 @@
-# Create TaskScheduler for parallel execution
+# Optimize Task scheduling algorithm
 # File: src/scheduler/TaskScheduler.java
