@@ -1,1 +1,1 @@
-# Implement WorkerNode server
+# Improve worker comms
