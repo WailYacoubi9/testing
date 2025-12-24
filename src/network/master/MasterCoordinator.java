@@ -1,2 +1,2 @@
-# Create MasterCoordinator for task distribution
+# Enhance MasterCoordinator coordination logic
 # File: src/network/master/MasterCoordinator.java
