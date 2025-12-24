@@ -1,1 +1,1 @@
-# Create MasterCoordinator
+# Enhance master coord
