@@ -1,2 +1,2 @@
-# Add TimingManager utility for performance metrics
+# Add performance monitoring and metrics
 # File: src/utils/TimingManager.java
