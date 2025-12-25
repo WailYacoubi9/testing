@@ -1,2 +1,2 @@
-# Implement wordcount C utility for testing
+# Final testing and validation of all components
 # File: test/wordcount.c
