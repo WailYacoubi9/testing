@@ -1,2 +1,1 @@
-# Add build system and Makefile
-# File: Makefile
+# Release v1.0
