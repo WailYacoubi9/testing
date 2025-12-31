@@ -29,9 +29,9 @@ PARAMS_FILE="$RESULTS_DIR/launcher_params_$TIMESTAMP.txt"
 
 echo "run,num_workers,ssh_start_time,port_ready_time,rmi_connected_time,total_time_s,rmi_time_ms" > "$CSV_FILE"
 
-# Configuration academique
-WORKER_COUNTS=(1 2 4 8 16 32)  # Extended range for scalability testing
-RUNS=30                        # 30 repetitions for statistical significance
+# Configuration academique - ajuste pour ecotype (17 noeuds = 16 workers max)
+WORKER_COUNTS=(1 2 4 8 16)     # Ajuste pour les noeuds disponibles
+RUNS=10                        # Reduit pour test initial (augmenter a 30 pour mesure finale)
 
 # Ce script mesure le VRAI temps de lancement:
 # 1. SSH + demarrage JVM (ssh ... java WorkerNode)
@@ -84,11 +84,17 @@ cd "$PROJECT_DIR"
 mkdir -p bin
 javac -d bin -sourcepath src $(find src -name "*.java") 2>/dev/null || true
 
-# Obtenir la liste des noeuds
+# Obtenir la liste des noeuds (FQDN depuis OAR_NODEFILE)
 ALL_NODES=$(cat $OAR_NODEFILE | sort -u)
 MASTER=$(echo "$ALL_NODES" | head -n 1)
 
 echo "[2/3] Execution des mesures..."
+echo "  Master: $MASTER"
+echo "  Noeuds disponibles:"
+echo "$ALL_NODES" | head -5 | sed 's/^/    /'
+if [ $(echo "$ALL_NODES" | wc -l) -gt 5 ]; then
+    echo "    ... ($(echo "$ALL_NODES" | wc -l) total)"
+fi
 
 for num_workers in "${WORKER_COUNTS[@]}"; do
     # Verifier qu'on a assez de workers
@@ -104,10 +110,8 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
     WORKERS=$(echo "$ALL_NODES" | tail -n +2 | head -n $num_workers)
 
     for run in $(seq 1 $RUNS); do
-        # Afficher progression
-        if [ $((run % 10)) -eq 0 ] || [ $run -eq 1 ]; then
-            echo "  Run $run/$RUNS..."
-        fi
+        # Afficher progression (chaque run pour debug)
+        echo -n "  Run $run/$RUNS: "
 
         # Nettoyer les workers precedents
         for hostname in $WORKERS; do
@@ -144,9 +148,10 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         PORT_READY_TIME=$(date +%s.%N)
 
         if [ "$all_ready" = false ]; then
-            echo "  [WARN] Run $run: Timeout - workers non prets"
+            echo "TIMEOUT"
             continue
         fi
+        echo -n "workers ready, "
 
         # ===========================================
         # MESURE RMI REELLE: Naming.lookup + executeCommand
@@ -165,9 +170,10 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         # Extraire le temps RMI en ms
         if [ -n "$RMI_OUTPUT" ]; then
             RMI_TIME_MS=$(echo "$RMI_OUTPUT" | cut -d',' -f3)
+            echo "RMI OK (${RMI_TIME_MS}ms)"
         else
             RMI_TIME_MS="0"
-            echo "  [WARN] Run $run: RMI benchmark failed"
+            echo "RMI FAILED"
         fi
 
         # Calculer le temps total (SSH start -> RMI connected)
