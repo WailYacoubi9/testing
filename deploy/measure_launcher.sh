@@ -110,8 +110,8 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
     WORKERS=$(echo "$ALL_NODES" | tail -n +2 | head -n $num_workers)
 
     for run in $(seq 1 $RUNS); do
-        # Afficher progression
-        echo "  Run $run/$RUNS..."
+        # Afficher progression (chaque run pour debug)
+        echo -n "  Run $run/$RUNS: "
 
         # Nettoyer les workers precedents
         for hostname in $WORKERS; do
@@ -123,7 +123,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         START_TIME=$(date +%s.%N)
 
         for hostname in $WORKERS; do
-            ssh $hostname "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $hostname 3000 > /tmp/worker.log 2>&1 </dev/null &"
+            ssh $hostname "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $hostname 3000 > /tmp/worker.log 2>&1 &"
         done
 
         # Attendre que tous les workers soient prets (port 3000 ouvert)
@@ -148,9 +148,10 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         PORT_READY_TIME=$(date +%s.%N)
 
         if [ "$all_ready" = false ]; then
-            echo "    -> TIMEOUT"
+            echo "TIMEOUT"
             continue
         fi
+        echo -n "workers ready, "
 
         # ===========================================
         # MESURE RMI REELLE: Naming.lookup + executeCommand
@@ -169,11 +170,10 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         # Extraire le temps RMI en ms
         if [ -n "$RMI_OUTPUT" ]; then
             RMI_TIME_MS=$(echo "$RMI_OUTPUT" | cut -d',' -f3)
-            TOTAL_SEC=$(echo "scale=2; $RMI_CONNECTED_TIME - $START_TIME" | bc)
-            echo "    -> OK: RMI ${RMI_TIME_MS}ms, Total: ${TOTAL_SEC}s"
+            echo "RMI OK (${RMI_TIME_MS}ms)"
         else
             RMI_TIME_MS="0"
-            echo "    -> FAILED: RMI connection error"
+            echo "RMI FAILED"
         fi
 
         # Calculer le temps total (SSH start -> RMI connected)
