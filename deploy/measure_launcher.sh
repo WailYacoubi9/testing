@@ -1,28 +1,49 @@
-#!/bin/bash  
-# Mesure du temps de lanceur (démarrage + sérialisation RMI)  
-  
-echo "╔══════════════════════════════════════════════════════════╗"  
-echo "║   MESURE DU TEMPS DE LANCEUR                           ║"  
-echo "╚══════════════════════════════════════════════════════════╝"  
-  
-PROJECT_DIR="$HOME/wordcount-distributed"  
-RESULTS_DIR="$PROJECT_DIR/launcher_results"  
-mkdir -p "$RESULTS_DIR"  
-  
-# Fichier de résultats  
-CSV_FILE="$RESULTS_DIR/launcher_$(date +%Y%m%d_%H%M%S).csv"  
-echo "Test,Workers,StartTime,WorkersReady,MasterConnected,LauncherTime" > "$CSV_FILE"  
-  
-# Nombre de workers à tester  
-WORKER_COUNTS=(2 3 4 5 6 7 8)  
+#!/bin/bash
+#=============================================================================
+# MESURE DU TEMPS DE LANCEUR (Initialisation Cluster)
+# Mesure les parametres alpha et beta du modele: T_init(n) = alpha * n + beta
+#
+# Methodologie academique:
+# - 30 repetitions par configuration (significativite statistique)
+# - Calcul moyenne, ecart-type, intervalle de confiance 95%
+# - Regression lineaire pour extraction alpha, beta
+#
+# Reference: Guide academique de mesure de performance
+#=============================================================================
 
-# === DEBUT AJOUT SECURITE ===
+set -e
 
-# 1. Compter les nœuds physiques réellement disponibles
-# (sort -u permet d'éviter de compter plusieurs coeurs du même nœud)
+echo "================================================================"
+echo "   MESURE DU TEMPS DE LANCEUR - Parametres alpha, beta          "
+echo "================================================================"
+
+PROJECT_DIR="${PROJECT_DIR:-$HOME/wordcount-distributed}"
+RESULTS_DIR="$PROJECT_DIR/launcher-results"
+mkdir -p "$RESULTS_DIR"
+
+# Fichier de resultats
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+CSV_FILE="$RESULTS_DIR/launcher_$TIMESTAMP.csv"
+STATS_FILE="$RESULTS_DIR/launcher_stats_$TIMESTAMP.csv"
+PARAMS_FILE="$RESULTS_DIR/launcher_params_$TIMESTAMP.txt"
+
+echo "run,num_workers,start_time,workers_ready_time,total_time_s" > "$CSV_FILE"
+
+# Configuration academique
+WORKER_COUNTS=(1 2 4 8 16 32)  # Extended range for scalability testing
+RUNS=30                        # 30 repetitions for statistical significance  
+
+# Verifier l'environnement Grid5000
+if [ -z "$OAR_NODEFILE" ]; then
+    echo "ERREUR: Ce script doit etre execute dans une reservation OAR"
+    echo "   Utilisez: oarsub -I -l nodes=33,walltime=2:00:00"
+    exit 1
+fi
+
+# Compter les noeuds disponibles
 TOTAL_AVAILABLE=$(cat "$OAR_NODEFILE" | sort -u | wc -l)
 
-# 2. Trouver le nombre maximum de workers demandé dans la liste
+# Trouver le nombre maximum de workers demande
 MAX_WORKERS_REQUESTED=0
 for n in "${WORKER_COUNTS[@]}"; do
     if (( n > MAX_WORKERS_REQUESTED )); then
@@ -30,105 +51,246 @@ for n in "${WORKER_COUNTS[@]}"; do
     fi
 done
 
-# 3. Calculer le total requis (Master + Max Workers)
+# Calculer le total requis (Master + Max Workers)
 REQUIRED_NODES=$((MAX_WORKERS_REQUESTED + 1))
 
-# 4. Vérifier et bloquer si insuffisant
+# Verifier et bloquer si insuffisant
 if [ "$TOTAL_AVAILABLE" -lt "$REQUIRED_NODES" ]; then
     echo ""
-    echo "❌ ERREUR CRITIQUE : Nombre de nœuds insuffisant !"
-    echo "---------------------------------------------------"
-    echo "   📉 Nœuds réservés (OAR) : $TOTAL_AVAILABLE"
-    echo "   📈 Nœuds requis         : $REQUIRED_NODES (1 Master + $MAX_WORKERS_REQUESTED Workers)"
-    echo "---------------------------------------------------"
-    echo "💡 Solution : Refaites votre réservation avec plus de nœuds."
-    echo "   Commande : oarsub -I -l nodes=$REQUIRED_NODES,walltime=00:30"
+    echo "ERREUR: Nombre de noeuds insuffisant!"
+    echo "  Noeuds reserves: $TOTAL_AVAILABLE"
+    echo "  Noeuds requis: $REQUIRED_NODES (1 Master + $MAX_WORKERS_REQUESTED Workers)"
     echo ""
+    echo "Solution: oarsub -I -l nodes=$REQUIRED_NODES,walltime=2:00:00"
     exit 1
 fi
 
-echo "✅ Vérification capacité : $TOTAL_AVAILABLE nœuds disponibles pour un besoin de $REQUIRED_NODES. OK."
+echo ""
+echo "Configuration:"
+echo "  Noeuds disponibles: $TOTAL_AVAILABLE"
+echo "  Workers a tester: ${WORKER_COUNTS[*]}"
+echo "  Repetitions: $RUNS"
+echo "  Resultats: $RESULTS_DIR"
+echo ""
   
-for num_workers in "${WORKER_COUNTS[@]}"; do  
-    echo ""  
-    echo "🧪 Test avec $num_workers workers..."  
-      
-    for run in {1..3}; do  
-        echo "  → Exécution $run/3"  
-          
-        # Nettoyer les workers précédents  
-        for hostname in $(cat $OAR_NODEFILE | head -n $((num_workers + 1)) | tail -n $num_workers); do  
-            ssh $hostname "pkill -f WorkerNode" 2>/dev/null || true  
-        done  
-          
-        # 1. Démarrage des workers  
-        start_workers=$(date +%s.%N)  
-          
-        worker_hosts=$(cat $OAR_NODEFILE | head -n $((num_workers + 1)) | tail -n $num_workers)  
-        for hostname in $worker_hosts; do  
-            ssh $hostname "nohup java -cp $PROJECT_DIR/bin network.worker.WorkerNode $hostname 3000 > launcher_worker.log 2>&1 &" &  
-        done  
-          
-        # 2. Attendre que les workers soient prêts  
-        workers_ready=$(date +%s.%N)  
-          
-        # Vérifier que tous les workers écoutent sur le port 3000  
-        all_ready=false  
-        timeout_counter=0  
-        while [ "$all_ready" = false ] && [ $timeout_counter -lt 60 ]; do  
-            ready_count=0  
-            for hostname in $worker_hosts; do  
-                if ssh $hostname "netstat -ln | grep :3000" >/dev/null 2>&1; then  
-                    ready_count=$((ready_count + 1))  
-                fi  
-            done  
-              
-            if [ $ready_count -eq $num_workers ]; then  
-                all_ready=true  
-            else  
-                sleep 1  
-                timeout_counter=$((timeout_counter + 1))  
-            fi  
-        done  
-          
-        if [ "$all_ready" = false ]; then  
-            echo "Timeout: workers non prêts"  
-            continue  
-        fi  
-          
-        # 3. Connexion du master (test de sérialisation RMI)  
-        master_connected=$(date +%s.%N)  
-          
-        # Créer un test de connexion RMI  
-        master_host=$(cat $OAR_NODEFILE | head -n 1)  
-        worker_list=$(echo $worker_hosts | awk '{printf "\"%s:3000\",", $0}' | sed 's/,$//')  
-          
-        # Tester la connexion RMI  
-        cd $PROJECT_DIR  
-        timeout 10 java -cp bin scheduler.Main "[$worker_list]" >/dev/null 2>&1 || true  
-          
-        end_time=$(date +%s.%N)  
-          
-        # Calculer les temps  
-        launcher_time=$(awk "BEGIN {printf \"%.3f\", $end_time - $start_workers}")  
-          
-        # Écrire dans CSV  
-        echo "launcher_${num_workers}w,$num_workers,$start_workers,$workers_ready,$master_connected,$launcher_time" >> "$CSV_FILE"  
-          
-        echo "Temps de lanceur: ${launcher_time}s"  
-          
-        # Nettoyer  
-        for hostname in $worker_hosts; do  
-            ssh $hostname "pkill -f WorkerNode" 2>/dev/null || true  
-        done  
-          
-        sleep 2  
-    done  
-done  
-  
-echo ""  
-echo " Mesures terminées!"  
-echo " Résultats: $CSV_FILE"  
-echo ""  
-echo " Générer les graphiques avec:"  
-echo "   python3 measurements/plot_launcher_time.py $CSV_FILE"
+# Compiler si necessaire
+echo "[1/3] Compilation..."
+cd "$PROJECT_DIR"
+mkdir -p bin
+javac -d bin -sourcepath src $(find src -name "*.java") 2>/dev/null || true
+
+# Obtenir la liste des noeuds
+ALL_NODES=$(cat $OAR_NODEFILE | sort -u)
+MASTER=$(echo "$ALL_NODES" | head -n 1)
+
+echo "[2/3] Execution des mesures..."
+
+for num_workers in "${WORKER_COUNTS[@]}"; do
+    # Verifier qu'on a assez de workers
+    if [ $num_workers -gt $((TOTAL_AVAILABLE - 1)) ]; then
+        echo "  Skip $num_workers workers (max disponible: $((TOTAL_AVAILABLE - 1)))"
+        continue
+    fi
+
+    echo ""
+    echo "--- Test avec $num_workers worker(s) ---"
+
+    # Selectionner les workers pour ce test
+    WORKERS=$(echo "$ALL_NODES" | tail -n +2 | head -n $num_workers)
+
+    for run in $(seq 1 $RUNS); do
+        # Afficher progression
+        if [ $((run % 10)) -eq 0 ] || [ $run -eq 1 ]; then
+            echo "  Run $run/$RUNS..."
+        fi
+
+        # Nettoyer les workers precedents
+        for hostname in $WORKERS; do
+            ssh $hostname "pkill -f WorkerNode 2>/dev/null" || true
+        done
+        sleep 1
+
+        # Mesure: Demarrage des workers
+        START_TIME=$(date +%s.%N)
+
+        for hostname in $WORKERS; do
+            ssh $hostname "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $hostname 3000 > /tmp/worker.log 2>&1 &"
+        done
+
+        # Attendre que tous les workers soient prets (port 3000 ouvert)
+        all_ready=false
+        timeout_counter=0
+        while [ "$all_ready" = false ] && [ $timeout_counter -lt 60 ]; do
+            ready_count=0
+            for hostname in $WORKERS; do
+                if ssh $hostname "netstat -ln 2>/dev/null | grep -q :3000"; then
+                    ready_count=$((ready_count + 1))
+                fi
+            done
+
+            if [ $ready_count -eq $num_workers ]; then
+                all_ready=true
+            else
+                sleep 0.5
+                timeout_counter=$((timeout_counter + 1))
+            fi
+        done
+
+        WORKERS_READY_TIME=$(date +%s.%N)
+
+        if [ "$all_ready" = false ]; then
+            echo "  [WARN] Run $run: Timeout - workers non prets"
+            continue
+        fi
+
+        # Calculer le temps total
+        TOTAL_TIME=$(echo "$WORKERS_READY_TIME - $START_TIME" | bc)
+
+        # Ecrire dans CSV
+        echo "$run,$num_workers,$START_TIME,$WORKERS_READY_TIME,$TOTAL_TIME" >> "$CSV_FILE"
+
+        # Nettoyer
+        for hostname in $WORKERS; do
+            ssh $hostname "pkill -f WorkerNode 2>/dev/null" || true
+        done
+
+        sleep 1
+    done
+done
+
+# ============================================================================
+# PHASE 3: CALCUL DES STATISTIQUES
+# ============================================================================
+
+echo ""
+echo "[3/3] Calcul des statistiques..."
+
+# Calculer les statistiques par nombre de workers
+echo "num_workers,mean_time_s,std_time_s,ci95_low,ci95_high,count" > "$STATS_FILE"
+
+for num_workers in "${WORKER_COUNTS[@]}"; do
+    # Extraire les temps pour ce nombre de workers
+    DATA=$(grep ",$num_workers," "$CSV_FILE" | cut -d',' -f5)
+
+    if [ -z "$DATA" ]; then
+        continue
+    fi
+
+    # Calculer avec awk
+    STATS=$(echo "$DATA" | awk '
+    {
+        sum += $1
+        sumsq += $1 * $1
+        count++
+        values[count] = $1
+    }
+    END {
+        if (count == 0) exit
+        mean = sum / count
+        if (count > 1) {
+            variance = (sumsq - sum*sum/count) / (count - 1)
+            stddev = sqrt(variance)
+        } else {
+            stddev = 0
+        }
+        stderr = stddev / sqrt(count)
+        ci95 = 1.96 * stderr
+        ci_low = mean - ci95
+        ci_high = mean + ci95
+        printf "%.4f,%.4f,%.4f,%.4f,%d", mean, stddev, ci_low, ci_high, count
+    }')
+
+    echo "$num_workers,$STATS" >> "$STATS_FILE"
+done
+
+# Regression lineaire pour extraire alpha et beta
+echo ""
+echo "Calcul de la regression lineaire: T_init(n) = alpha * n + beta"
+
+REGRESSION=$(cat "$STATS_FILE" | tail -n +2 | awk -F',' '
+{
+    n = $1
+    t = $2
+    sum_n += n
+    sum_t += t
+    sum_nt += n * t
+    sum_nn += n * n
+    count++
+}
+END {
+    if (count < 2) {
+        print "0,0,0"
+        exit
+    }
+    alpha = (count * sum_nt - sum_n * sum_t) / (count * sum_nn - sum_n * sum_n)
+    beta = (sum_t - alpha * sum_n) / count
+
+    # R² (coefficient de determination)
+    mean_t = sum_t / count
+    ss_tot = 0
+    ss_res = 0
+}
+{
+    predicted = alpha * $1 + beta
+    ss_res += ($2 - predicted)^2
+    ss_tot += ($2 - mean_t)^2
+}
+END {
+    if (ss_tot > 0) {
+        r_squared = 1 - ss_res / ss_tot
+    } else {
+        r_squared = 1
+    }
+    printf "%.4f,%.4f,%.4f", alpha, beta, r_squared
+}')
+
+ALPHA=$(echo $REGRESSION | cut -d',' -f1)
+BETA=$(echo $REGRESSION | cut -d',' -f2)
+R_SQUARED=$(echo $REGRESSION | cut -d',' -f3)
+
+# Sauvegarder les parametres
+cat > "$PARAMS_FILE" << EOF
+# Parametres d'initialisation pour le modele theorique
+# Mesures sur Grid5000 Nantes
+# Date: $(date)
+# Regression: T_init(n) = alpha * n + beta
+
+alpha = $ALPHA
+beta = $BETA
+r_squared = $R_SQUARED
+
+# Interpretation:
+# - alpha: temps additionnel par worker (SSH + JVM + RMI registry)
+# - beta: overhead fixe (demarrage master)
+EOF
+
+# ============================================================================
+# AFFICHAGE DES RESULTATS
+# ============================================================================
+
+echo ""
+echo "================================================================"
+echo "                    RESULTATS                                    "
+echo "================================================================"
+echo ""
+echo "Statistiques par nombre de workers:"
+echo ""
+cat "$STATS_FILE" | column -t -s','
+echo ""
+echo "----------------------------------------------------------------"
+echo "PARAMETRES DU MODELE (regression lineaire):"
+echo ""
+echo "  T_init(n) = $ALPHA * n + $BETA"
+echo ""
+echo "  alpha = $ALPHA secondes/worker"
+echo "  beta  = $BETA secondes (overhead fixe)"
+echo "  R²    = $R_SQUARED"
+echo "----------------------------------------------------------------"
+echo ""
+echo "Fichiers generes:"
+echo "  Donnees brutes: $CSV_FILE"
+echo "  Statistiques:   $STATS_FILE"
+echo "  Parametres:     $PARAMS_FILE"
+echo ""
+echo "Pour visualiser:"
+echo "  python3 benchmarks/plot_validation.py $CSV_FILE"
