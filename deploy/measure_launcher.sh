@@ -27,11 +27,16 @@ CSV_FILE="$RESULTS_DIR/launcher_$TIMESTAMP.csv"
 STATS_FILE="$RESULTS_DIR/launcher_stats_$TIMESTAMP.csv"
 PARAMS_FILE="$RESULTS_DIR/launcher_params_$TIMESTAMP.txt"
 
-echo "run,num_workers,start_time,workers_ready_time,total_time_s" > "$CSV_FILE"
+echo "run,num_workers,ssh_start_time,port_ready_time,rmi_connected_time,total_time_s,rmi_time_ms" > "$CSV_FILE"
 
 # Configuration academique
 WORKER_COUNTS=(1 2 4 8 16 32)  # Extended range for scalability testing
-RUNS=30                        # 30 repetitions for statistical significance  
+RUNS=30                        # 30 repetitions for statistical significance
+
+# Ce script mesure le VRAI temps de lancement:
+# 1. SSH + demarrage JVM (ssh ... java WorkerNode)
+# 2. Port 3000 ouvert (netstat check)
+# 3. Connexion RMI reelle (Naming.lookup + executeCommand)  
 
 # Verifier l'environnement Grid5000
 if [ -z "$OAR_NODEFILE" ]; then
@@ -136,18 +141,40 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
             fi
         done
 
-        WORKERS_READY_TIME=$(date +%s.%N)
+        PORT_READY_TIME=$(date +%s.%N)
 
         if [ "$all_ready" = false ]; then
             echo "  [WARN] Run $run: Timeout - workers non prets"
             continue
         fi
 
-        # Calculer le temps total
-        TOTAL_TIME=$(echo "$WORKERS_READY_TIME - $START_TIME" | bc)
+        # ===========================================
+        # MESURE RMI REELLE: Naming.lookup + executeCommand
+        # ===========================================
+        # Construire la liste des workers pour le benchmark Java
+        WORKER_ARGS=""
+        for hostname in $WORKERS; do
+            WORKER_ARGS="$WORKER_ARGS $hostname:3000"
+        done
+
+        # Executer le benchmark RMI reel
+        RMI_OUTPUT=$(java -cp bin benchmark.LauncherBenchmark $WORKER_ARGS 2>/dev/null | grep "^RESULT:" | cut -d':' -f2)
+
+        RMI_CONNECTED_TIME=$(date +%s.%N)
+
+        # Extraire le temps RMI en ms
+        if [ -n "$RMI_OUTPUT" ]; then
+            RMI_TIME_MS=$(echo "$RMI_OUTPUT" | cut -d',' -f3)
+        else
+            RMI_TIME_MS="0"
+            echo "  [WARN] Run $run: RMI benchmark failed"
+        fi
+
+        # Calculer le temps total (SSH start -> RMI connected)
+        TOTAL_TIME=$(echo "$RMI_CONNECTED_TIME - $START_TIME" | bc)
 
         # Ecrire dans CSV
-        echo "$run,$num_workers,$START_TIME,$WORKERS_READY_TIME,$TOTAL_TIME" >> "$CSV_FILE"
+        echo "$run,$num_workers,$START_TIME,$PORT_READY_TIME,$RMI_CONNECTED_TIME,$TOTAL_TIME,$RMI_TIME_MS" >> "$CSV_FILE"
 
         # Nettoyer
         for hostname in $WORKERS; do
@@ -169,8 +196,8 @@ echo "[3/3] Calcul des statistiques..."
 echo "num_workers,mean_time_s,std_time_s,ci95_low,ci95_high,count" > "$STATS_FILE"
 
 for num_workers in "${WORKER_COUNTS[@]}"; do
-    # Extraire les temps pour ce nombre de workers
-    DATA=$(grep ",$num_workers," "$CSV_FILE" | cut -d',' -f5)
+    # Extraire les temps pour ce nombre de workers (colonne 6 = total_time_s)
+    DATA=$(grep ",$num_workers," "$CSV_FILE" | cut -d',' -f6)
 
     if [ -z "$DATA" ]; then
         continue
@@ -251,8 +278,16 @@ R_SQUARED=$(echo $REGRESSION | cut -d',' -f3)
 # Sauvegarder les parametres
 cat > "$PARAMS_FILE" << EOF
 # Parametres d'initialisation pour le modele theorique
-# Mesures sur Grid5000 Nantes
+# Mesures REELLES sur Grid5000 Nantes
 # Date: $(date)
+#
+# Mesure COMPLETE du temps de lancement:
+# - SSH vers chaque worker
+# - Demarrage JVM + WorkerNode
+# - Enregistrement RMI registry (port 3000)
+# - Connexion RMI reelle depuis le master (Naming.lookup)
+# - Verification connexion (executeCommand)
+#
 # Regression: T_init(n) = alpha * n + beta
 
 alpha = $ALPHA
@@ -260,8 +295,8 @@ beta = $BETA
 r_squared = $R_SQUARED
 
 # Interpretation:
-# - alpha: temps additionnel par worker (SSH + JVM + RMI registry)
-# - beta: overhead fixe (demarrage master)
+# - alpha: temps additionnel par worker (SSH + JVM + RMI)
+# - beta: overhead fixe (compilation, setup master)
 EOF
 
 # ============================================================================
@@ -270,7 +305,7 @@ EOF
 
 echo ""
 echo "================================================================"
-echo "                    RESULTATS                                    "
+echo "       RESULTATS (Mesure RMI REELLE)                             "
 echo "================================================================"
 echo ""
 echo "Statistiques par nombre de workers:"
