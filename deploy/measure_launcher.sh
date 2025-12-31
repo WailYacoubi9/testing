@@ -123,7 +123,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         START_TIME=$(date +%s.%N)
 
         for hostname in $WORKERS; do
-            ssh $hostname "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $hostname 3000 > /tmp/worker.log 2>&1 &"
+            ssh $hostname "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $hostname 3000 > /tmp/worker.log 2>&1 </dev/null &"
         done
 
         # Attendre que tous les workers soient prets (port 3000 ouvert)
