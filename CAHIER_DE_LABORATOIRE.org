@@ -1,0 +1,264 @@
+#+TITLE: Cahier de Laboratoire - Wordcount Distribue
+#+AUTHOR: [Votre Equipe]
+#+DATE: 2024
+#+OPTIONS: toc:2 num:t
+
+* Introduction
+
+Ce cahier de laboratoire documente toutes les experimentations realisees
+pour le projet de Makefile distribue sur Grid5000.
+
+** Informations du projet
+- Langage: Java
+- Framework: RMI (Remote Method Invocation)
+- Infrastructure: Grid5000
+- Repository: [URL du repository]
+
+** Convention
+- On n'edite jamais le passe du cahier
+- Chaque experience est documentee avec: date, SHA git, machines, scripts, resultats
+
+** Modele Theorique
+#+BEGIN_SRC
+T_total = T_init + T_seq + T_comm + T_calc + T_agg
+
+Avec:
+- T_init(n) = alpha * n + beta
+- T_seq(S) = T_parse + S / V_split
+- T_comm(S, n, mode) = n * (L + S/n / BW)  [SCP] ou L [NFS]
+- T_calc(S, n) = S * density / (n * V_wc) + n * (L_rmi + o_rmi)
+- T_agg = constante
+#+END_SRC
+
+* Parametres a Mesurer
+
+| Parametre | Description                    | Script                    |
+|-----------+--------------------------------+---------------------------|
+| alpha     | Cout par worker (s)            | run_init_benchmark.sh     |
+| beta      | Overhead fixe init (s)         | run_init_benchmark.sh     |
+| L_rmi     | Latence lookup RMI (ms)        | run_rmi_benchmark.sh      |
+| o_rmi     | Overhead appel RMI (ms)        | run_rmi_benchmark.sh      |
+| L_scp     | Latence SCP (ms)               | run_transfer_benchmark.sh |
+| BW_scp    | Bande passante SCP (MB/s)      | run_transfer_benchmark.sh |
+| L_nfs     | Latence NFS (ms)               | run_transfer_benchmark.sh |
+| BW_nfs    | Bande passante NFS (MB/s)      | run_transfer_benchmark.sh |
+| V_wc      | Vitesse wordcount (lignes/s)   | run_wordcount_benchmark.sh|
+
+* Experience 1 - Mesure Latence RMI
+** Date
+[A COMPLETER]
+
+** Git SHA
+#+BEGIN_SRC bash
+git rev-parse HEAD
+#+END_SRC
+
+** Machines utilisees
+- Site: [A COMPLETER]
+- Master: [hostname]
+- Workers: [liste des workers]
+
+** Reservation OAR
+#+BEGIN_SRC bash
+oarsub -I -l nodes=4,walltime=1:00:00
+#+END_SRC
+
+** Script execute
+#+BEGIN_SRC bash
+export PROJECT_DIR=$HOME/wordcount-distributed
+bash benchmarks/run_rmi_benchmark.sh
+#+END_SRC
+
+** Resultats
+- Fichier: benchmarks/results/rmi/rmi_summary_[DATE].csv
+- L_rmi moyen: [X] ms
+- o_rmi moyen: [X] ms
+- Ecart-type L_rmi: [X] ms
+- Ecart-type o_rmi: [X] ms
+
+** Observations
+[Notes sur les mesures, anomalies observees, etc.]
+
+* Experience 2 - Mesure Temps de Calcul Wordcount
+** Date
+[A COMPLETER]
+
+** Git SHA
+#+BEGIN_SRC bash
+git rev-parse HEAD
+#+END_SRC
+
+** Machines utilisees
+- Site: [A COMPLETER]
+- Machine: [hostname]
+
+** Script execute
+#+BEGIN_SRC bash
+export PROJECT_DIR=$HOME/wordcount-distributed
+bash benchmarks/run_wordcount_benchmark.sh
+#+END_SRC
+
+** Resultats
+- Fichier: benchmarks/results/compute/wordcount_stats_[DATE].csv
+- V_wc moyen: [X] lignes/seconde
+- Ecart-type: [X] lignes/seconde
+
+** Observations
+[Notes sur les mesures]
+
+* Experience 3 - Mesure Transfert SCP/NFS
+** Date
+[A COMPLETER]
+
+** Git SHA
+#+BEGIN_SRC bash
+git rev-parse HEAD
+#+END_SRC
+
+** Machines utilisees
+- Site: [A COMPLETER]
+- Source: [hostname]
+- Destination: [hostname]
+
+** Reservation OAR
+#+BEGIN_SRC bash
+oarsub -I -l nodes=2,walltime=1:00:00
+#+END_SRC
+
+** Script execute
+#+BEGIN_SRC bash
+export PROJECT_DIR=$HOME/wordcount-distributed
+bash benchmarks/run_transfer_benchmark.sh
+#+END_SRC
+
+** Resultats
+- Fichier: benchmarks/results/transfer/transfer_params_[DATE].txt
+- L_scp: [X] ms
+- BW_scp: [X] MB/s
+- L_nfs: [X] ms
+- BW_nfs: [X] MB/s
+
+** Observations
+[Notes sur les mesures]
+
+* Experience 4 - Mesure Initialisation Cluster
+** Date
+[A COMPLETER]
+
+** Git SHA
+#+BEGIN_SRC bash
+git rev-parse HEAD
+#+END_SRC
+
+** Machines utilisees
+- Site: [A COMPLETER]
+- Nombre de noeuds: [N]
+
+** Reservation OAR
+#+BEGIN_SRC bash
+oarsub -I -l nodes=10,walltime=2:00:00
+#+END_SRC
+
+** Script execute
+#+BEGIN_SRC bash
+export PROJECT_DIR=$HOME/wordcount-distributed
+bash benchmarks/run_init_benchmark.sh
+#+END_SRC
+
+** Resultats
+- Fichier: benchmarks/results/init/init_params_[DATE].txt
+- alpha: [X] secondes/worker
+- beta: [X] secondes
+
+** Observations
+[Notes sur les mesures]
+
+* Calibration du Modele
+** Date
+[A COMPLETER]
+
+** Git SHA
+#+BEGIN_SRC bash
+git rev-parse HEAD
+#+END_SRC
+
+** Script execute
+#+BEGIN_SRC bash
+python3 benchmarks/calibrate_model.py --results-dir benchmarks/results --output model/model_config.ini
+#+END_SRC
+
+** Parametres calibres
+| Parametre | Valeur |
+|-----------+--------|
+| alpha     |        |
+| beta      |        |
+| L_rmi     |        |
+| o_rmi     |        |
+| L_scp     |        |
+| BW_scp    |        |
+| L_nfs     |        |
+| BW_nfs    |        |
+| V_wc      |        |
+
+* Experience 5 - Validation sur 64 Coeurs
+** Date
+[A COMPLETER]
+
+** Git SHA
+#+BEGIN_SRC bash
+git rev-parse HEAD
+#+END_SRC
+
+** Machines utilisees
+- Site: [A COMPLETER]
+- Nombre de noeuds: 65 (1 master + 64 workers)
+
+** Reservation OAR
+#+BEGIN_SRC bash
+oarsub -I -l nodes=65,walltime=4:00:00
+#+END_SRC
+
+** Script execute
+#+BEGIN_SRC bash
+export PROJECT_DIR=$HOME/wordcount-distributed
+bash benchmarks/validate_model.sh
+#+END_SRC
+
+** Resultats
+- Fichier: benchmarks/results/validation/validation_[DATE].csv
+- Graphiques: benchmarks/results/plots/
+
+** Generation des graphiques
+#+BEGIN_SRC bash
+python3 benchmarks/plot_validation.py benchmarks/results/validation/validation_[DATE].csv
+#+END_SRC
+
+** Metriques de validation
+| Configuration | T_mesure (s) | T_modele (s) | Erreur (%) |
+|---------------+--------------+--------------+------------|
+| 1 worker      |              |              |            |
+| 2 workers     |              |              |            |
+| 4 workers     |              |              |            |
+| 8 workers     |              |              |            |
+| 16 workers    |              |              |            |
+| 32 workers    |              |              |            |
+| 64 workers    |              |              |            |
+
+** R² du modele
+[A COMPLETER]
+
+** Observations
+[Analyse des resultats, limites observees, etc.]
+
+* Historique des modifications
+
+| Date | Description | SHA |
+|------+-------------+-----|
+|      |             |     |
+
+* References
+
+- Graham, R.L. (1969). "Bounds on Multiprocessing Timing Anomalies". SIAM Journal.
+- Culler et al. (1993). "LogP: A Practical Model of Parallel Computation".
+- Valiant, L.G. (1990). "A Bridging Model for Parallel Computation" (BSP).
+- Amdahl, G.M. (1967). "Validity of the single processor approach".
