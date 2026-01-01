@@ -74,26 +74,16 @@ for n in "${WORKER_COUNTS[@]}"; do
         echo "  Run $run: starting workers..."
         START=$(date +%s.%N)
 
-        # Start workers with nohup
+        # Start workers with nohup - IN PARALLEL
         for h in $WORKERS; do
-            timeout 5 ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=2 $h "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 </dev/null > /tmp/worker.log 2>&1 &" </dev/null 2>/dev/null
+            timeout 5 ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=2 $h "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 </dev/null > /tmp/worker.log 2>&1 &" </dev/null 2>/dev/null &
         done
+        wait
 
         echo "  Run $run: waiting for ports..."
-        # Wait for ports (simple polling)
-        for i in {1..20}; do
-            ready=0
-            for h in $WORKERS; do
-                if timeout 2 ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=1 $h "netstat -ln | grep -q :3000" </dev/null 2>/dev/null; then
-                    ready=$((ready + 1))
-                fi
-            done
-            echo "    check $i: $ready/$n ready"
-            if [ $ready -eq $n ]; then
-                break
-            fi
-            sleep 0.5
-        done
+        # Wait for ports - simple sleep instead of polling (faster)
+        sleep 3
+        echo "    waited 3s for workers to start"
 
         # RMI test
         WORKER_ARGS=""
