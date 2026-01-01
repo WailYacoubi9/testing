@@ -1,13 +1,19 @@
 #!/bin/bash
 #=============================================================================
-# BENCHMARK COMPLET - Mesure toutes les composantes du modèle théorique
+# BENCHMARK COMPLET - Mesure RÉALISTE des composantes
 # T_total = T_init + T_split + T_calc + T_merge
+#
+# RÉALITÉ:
+# - T_init: Sequential RMI lookups (Naming.lookup en boucle)
+# - T_split: Split local + transfert parallèle vers workers
+# - T_calc: Calcul parallèle sur workers (wordcount)
+# - T_merge: Récupération résultats + agrégation locale
 #=============================================================================
 
 set -e
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║   BENCHMARK COMPLET - MODÈLE THÉORIQUE WORDCOUNT            ║"
+echo "║   BENCHMARK RÉALISTE - MODÈLE WORDCOUNT DISTRIBUÉ           ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 
 # Configuration
@@ -25,7 +31,7 @@ RUNS=3
 # Vérification OAR
 if [ -z "$OAR_NODEFILE" ]; then
     echo "❌ Erreur: Ce script doit être lancé dans un job OAR"
-    echo "   oarsub -I -l nodes=17,walltime=2:00:00"
+    echo "   oarsub -I -p \"cluster='ecotype'\" -l nodes=19,walltime=2:00:00"
     exit 1
 fi
 
@@ -63,11 +69,13 @@ mkdir -p bin
 javac -d bin -sourcepath src $(find src -name "*.java") 2>/dev/null || true
 
 #=============================================================================
-# 1. MESURE T_init(n) - Temps d'initialisation
+# 1. MESURE T_init(n) = α × n + β
+# RÉALITÉ: Naming.lookup() est SÉQUENTIEL dans une boucle Java
+# On mesure: temps pour faire n lookups RMI séquentiels
 #=============================================================================
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo "[1/4] MESURE T_init(n) = α × n + β"
+echo "[1/4] MESURE T_init(n) = α × n + β (RMI lookups séquentiels)"
 echo "═══════════════════════════════════════════════════════════════"
 
 for num_workers in "${WORKER_COUNTS[@]}"; do
@@ -78,49 +86,50 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
 
     WORKERS=$(echo "$ALL_NODES" | tail -n +2 | head -n $num_workers)
 
+    # PRÉ-DÉMARRAGE: Lancer les workers UNE FOIS (hors mesure)
+    echo "  Pré-démarrage de $num_workers workers..."
+    for h in $WORKERS; do
+        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
+    done
+    wait
+    sleep 1
+
+    for h in $WORKERS; do
+        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h \
+            "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 > /tmp/worker.log 2>&1 &" \
+            </dev/null 2>/dev/null &
+    done
+    wait
+    sleep 3  # Attendre que tous les workers soient prêts
+
+    # MESURE: Uniquement les RMI lookups séquentiels
     for run in $(seq 1 $RUNS); do
         echo "  T_init: $num_workers workers, run $run/$RUNS"
 
-        # Cleanup
-        for h in $WORKERS; do
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
-        done
-        wait
-        sleep 1
-
-        # Start workers
-        START_TIME=$(date +%s%N)
-
-        for h in $WORKERS; do
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h \
-                "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 > /tmp/worker.log 2>&1 &" \
-                </dev/null 2>/dev/null &
-        done
-        wait
-
-        # Wait for ports
-        sleep 3
-
-        # RMI lookup
+        # Construire args pour LauncherBenchmark
         WORKER_ARGS=""
         for h in $WORKERS; do
             WORKER_ARGS="$WORKER_ARGS $h:3000"
         done
 
+        # Mesurer UNIQUEMENT le temps des lookups RMI séquentiels
+        START_TIME=$(date +%s%N)
+
+        # LauncherBenchmark fait: for each worker: Naming.lookup() (SÉQUENTIEL)
         java -cp bin benchmark.LauncherBenchmark $WORKER_ARGS 2>/dev/null | grep "^RESULT:" > /tmp/rmi_result.txt || true
 
         END_TIME=$(date +%s%N)
         DURATION_MS=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000" | bc)
 
         echo "$run,$num_workers,$DURATION_MS" >> "$INIT_CSV"
-
-        # Cleanup
-        for h in $WORKERS; do
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
-        done
-        wait
-        sleep 1
     done
+
+    # Cleanup après toutes les runs pour ce n
+    for h in $WORKERS; do
+        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
+    done
+    wait
+    sleep 1
 done
 
 echo "  ✓ T_init sauvegardé: $INIT_CSV"
@@ -262,29 +271,49 @@ done
 echo "  ✓ T_calc sauvegardé: $CALC_CSV"
 
 #=============================================================================
-# 4. MESURE T_merge(n) - Temps de fusion
+# 4. MESURE T_merge(n) = T_fetch + T_aggregate
+# RÉALITÉ: Récupérer résultats depuis workers + agrégation locale
 #=============================================================================
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo "[4/4] MESURE T_merge(n)"
+echo "[4/4] MESURE T_merge(n) = T_fetch + T_aggregate"
 echo "═══════════════════════════════════════════════════════════════"
 
 for num_workers in "${WORKER_COUNTS[@]}"; do
-    # Créer fichiers de résultats simulés
-    for i in $(seq 1 $num_workers); do
-        echo "100 word$i" > "$TEST_DIR/count_$i.txt"
-        for j in $(seq 1 1000); do
-            echo "$j word_$j" >> "$TEST_DIR/count_$i.txt"
-        done
+    if [ $num_workers -ge $TOTAL_NODES ]; then
+        continue
+    fi
+
+    WORKERS=$(echo "$ALL_NODES" | tail -n +2 | head -n $num_workers)
+
+    # Pré-créer des résultats sur chaque worker (simule résultat wordcount)
+    echo "  Préparation résultats sur $num_workers workers..."
+    i=0
+    for h in $WORKERS; do
+        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h \
+            "for j in \$(seq 1 1000); do echo \"\$j word_\$j\"; done > /tmp/result.txt" \
+            </dev/null 2>/dev/null &
+        i=$((i + 1))
     done
+    wait
 
     for run in $(seq 1 $RUNS); do
         echo "  T_merge: $num_workers workers, run $run/$RUNS"
 
+        mkdir -p "$TEST_DIR/merge_tmp"
+
         START_TIME=$(date +%s%N)
 
-        # Merge comme dans le vrai wordcount
-        cat "$TEST_DIR"/count_*.txt | \
+        # 1. FETCH: Récupérer résultats depuis tous les workers (parallèle)
+        i=0
+        for h in $WORKERS; do
+            scp -o StrictHostKeyChecking=no "$h:/tmp/result.txt" "$TEST_DIR/merge_tmp/count_$i.txt" 2>/dev/null &
+            i=$((i + 1))
+        done
+        wait
+
+        # 2. AGGREGATE: Fusionner tous les résultats
+        cat "$TEST_DIR/merge_tmp"/count_*.txt | \
             awk '{counts[$2]+=$1} END {for(w in counts) print counts[w], w}' | \
             sort -rn > "$TEST_DIR/final_result.txt"
 
@@ -292,10 +321,9 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         DURATION_MS=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000" | bc)
 
         echo "$run,$num_workers,$DURATION_MS" >> "$MERGE_CSV"
-    done
 
-    # Cleanup
-    rm -f "$TEST_DIR"/count_*.txt "$TEST_DIR/final_result.txt"
+        rm -rf "$TEST_DIR/merge_tmp"
+    done
 done
 
 echo "  ✓ T_merge sauvegardé: $MERGE_CSV"
