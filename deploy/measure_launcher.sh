@@ -133,7 +133,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         while [ "$all_ready" = false ] && [ $timeout_counter -lt 60 ]; do
             ready_count=0
             for hostname in $WORKERS; do
-                if ssh $hostname "netstat -ln 2>/dev/null | grep -q :3000"; then
+                if ssh $hostname "netstat -ln 2>/dev/null | grep -q :3000" </dev/null; then
                     ready_count=$((ready_count + 1))
                 fi
             done
