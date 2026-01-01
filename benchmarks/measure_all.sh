@@ -71,6 +71,18 @@ mkdir -p bin
 javac -d bin -sourcepath src $(find src -name "*.java") 2>/dev/null || true
 
 #=============================================================================
+# CLEANUP GLOBAL AU DÉMARRAGE
+#=============================================================================
+echo ""
+echo "Nettoyage global de tous les noeuds..."
+for h in $ALL_NODES; do
+    oarsh -n $h "pkill -9 -f WorkerNode 2>/dev/null; pkill -9 -f java 2>/dev/null" &
+done
+wait
+sleep 2
+echo "  ✓ Cleanup terminé"
+
+#=============================================================================
 # 1. MESURE T_init(n) = α × n + β
 # RÉALITÉ: Naming.lookup() est SÉQUENTIEL dans une boucle Java
 # On mesure: temps pour faire n lookups RMI séquentiels
@@ -90,17 +102,31 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
 
     # PRÉ-DÉMARRAGE: Lancer les workers UNE FOIS (hors mesure)
     echo "  Pré-démarrage de $num_workers workers..."
+
+    # Cleanup
     for h in $WORKERS; do
-        oarsh -n $h "pkill -f WorkerNode" 2>/dev/null &
+        oarsh -n $h "pkill -9 -f WorkerNode" 2>/dev/null &
     done
     wait
     sleep 1
 
+    # Démarrage des workers
     for h in $WORKERS; do
-        oarsh -n $h "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 > /tmp/worker.log 2>&1 &" &
+        echo "    Démarrage worker sur $h..."
+        oarsh -n $h "cd $PROJECT_DIR && java -cp bin network.worker.WorkerNode $h 3000 > /tmp/worker.log 2>&1 &" </dev/null &
     done
     wait
-    sleep 3  # Attendre que tous les workers soient prêts
+
+    echo "  Attente 5s pour initialisation RMI..."
+    sleep 5
+
+    # Vérification rapide
+    FIRST_WORKER=$(echo "$WORKERS" | head -1)
+    if oarsh -n $FIRST_WORKER "ps aux | grep -q '[W]orkerNode'" 2>/dev/null; then
+        echo "  ✓ Workers démarrés"
+    else
+        echo "  ⚠ Vérification worker échouée, on continue..."
+    fi
 
     # MESURE: Uniquement les RMI lookups séquentiels
     for run in $(seq 1 $RUNS); do
