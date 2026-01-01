@@ -50,11 +50,6 @@ echo ""
 echo "Config: workers=${WORKER_COUNTS[*]}, runs=$RUNS"
 echo ""
 
-# SSH function - truly non-blocking
-ssh_cmd() {
-    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 "$@" </dev/null 2>/dev/null
-}
-
 for n in "${WORKER_COUNTS[@]}"; do
     # Check if we have enough workers
     if [ $n -ge $TOTAL ]; then
@@ -67,32 +62,37 @@ for n in "${WORKER_COUNTS[@]}"; do
     echo "=== $n worker(s) ==="
 
     for run in $(seq 1 $RUNS); do
-        # Cleanup
+        echo "  Run $run: cleanup..."
+
+        # Cleanup - run in parallel with timeout
         for h in $WORKERS; do
-            ssh_cmd $h "pkill -f WorkerNode" &
+            timeout 3 ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=2 $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
         done
         wait
         sleep 1
 
-        # Start workers and measure
+        echo "  Run $run: starting workers..."
         START=$(date +%s.%N)
 
+        # Start workers with nohup
         for h in $WORKERS; do
-            ssh_cmd $h "cd $PROJECT_DIR && java -cp bin network.worker.WorkerNode $h 3000 > /tmp/worker.log 2>&1 &"
+            timeout 5 ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=2 $h "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 </dev/null > /tmp/worker.log 2>&1 &" </dev/null 2>/dev/null
         done
 
+        echo "  Run $run: waiting for ports..."
         # Wait for ports (simple polling)
-        for i in {1..30}; do
+        for i in {1..20}; do
             ready=0
             for h in $WORKERS; do
-                if ssh_cmd $h "netstat -ln | grep -q :3000"; then
+                if timeout 2 ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=1 $h "netstat -ln | grep -q :3000" </dev/null 2>/dev/null; then
                     ready=$((ready + 1))
                 fi
             done
+            echo "    check $i: $ready/$n ready"
             if [ $ready -eq $n ]; then
                 break
             fi
-            sleep 0.3
+            sleep 0.5
         done
 
         # RMI test
@@ -113,7 +113,7 @@ for n in "${WORKER_COUNTS[@]}"; do
 
         # Cleanup
         for h in $WORKERS; do
-            ssh_cmd $h "pkill -f WorkerNode" &
+            timeout 3 ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=2 $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
         done
         wait
         sleep 0.5
