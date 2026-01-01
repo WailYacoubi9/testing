@@ -100,7 +100,7 @@ T_LAUNCH_START=$(date +%s%3N)
 echo -e "${BLUE}Starting worker nodes...${NC}"
 for worker in $WORKERS; do
     echo "  Starting worker on $worker:$PORT..."
-    ssh $worker "cd ~ && nohup java -cp $PROJECT_DIR/bin network.worker.WorkerNode $worker $PORT > /tmp/worker_nfs_${worker}.log 2>&1 &" &
+    oarsh -n $worker "cd ~ && nohup java -cp $PROJECT_DIR/bin network.worker.WorkerNode $worker $PORT > /tmp/worker_nfs_${worker}.log 2>&1 &" &
 done
 
 echo -e "${BLUE}Waiting for workers to initialize...${NC}"
@@ -126,7 +126,7 @@ echo ""
 
 echo -e "${BLUE}Cleanup...${NC}"
 for worker in $WORKERS; do
-    ssh $worker "pkill -f 'java.*WorkerNode'" 2>/dev/null || true
+    oarsh -n $worker "pkill -f 'java.*WorkerNode'" 2>/dev/null || true
 done
 echo -e "${GREEN}Workers stopped${NC}"
 

@@ -8,6 +8,8 @@
 # - T_split: Split local + transfert parallèle vers workers
 # - T_calc: Calcul parallèle sur workers (wordcount)
 # - T_merge: Récupération résultats + agrégation locale
+#
+# NOTE: Utilise oarsh/oarcp au lieu de ssh/scp pour Grid5000
 #=============================================================================
 
 set -e
@@ -89,15 +91,13 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
     # PRÉ-DÉMARRAGE: Lancer les workers UNE FOIS (hors mesure)
     echo "  Pré-démarrage de $num_workers workers..."
     for h in $WORKERS; do
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
+        oarsh -n $h "pkill -f WorkerNode" 2>/dev/null &
     done
     wait
     sleep 1
 
     for h in $WORKERS; do
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h \
-            "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 > /tmp/worker.log 2>&1 &" \
-            </dev/null 2>/dev/null &
+        oarsh -n $h "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 > /tmp/worker.log 2>&1 &" &
     done
     wait
     sleep 3  # Attendre que tous les workers soient prêts
@@ -126,7 +126,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
 
     # Cleanup après toutes les runs pour ce n
     for h in $WORKERS; do
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
+        oarsh -n $h "pkill -f WorkerNode" 2>/dev/null &
     done
     wait
     sleep 1
@@ -162,12 +162,12 @@ for size_mb in "${FILE_SIZES_MB[@]}"; do
         # Split en 8 partitions
         split -n 8 -d "$TEST_DIR/input_${size_mb}mb.txt" "$TEST_DIR/part_"
 
-        # Transfert vers workers (parallèle)
+        # Transfert vers workers (parallèle) - utilise oarcp
         i=0
         for h in $SPLIT_WORKERS; do
             PART="$TEST_DIR/part_$(printf '%02d' $i)"
             if [ -f "$PART" ]; then
-                scp -o StrictHostKeyChecking=no "$PART" "$h:/tmp/split_part.txt" 2>/dev/null &
+                oarcp "$PART" $h:/tmp/split_part.txt 2>/dev/null &
             fi
             i=$((i + 1))
         done
@@ -204,14 +204,12 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
 
     # Démarrer workers une fois
     for h in $WORKERS; do
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null || true
+        oarsh -n $h "pkill -f WorkerNode" 2>/dev/null || true
     done
     sleep 1
 
     for h in $WORKERS; do
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h \
-            "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 > /tmp/worker.log 2>&1 &" \
-            </dev/null 2>/dev/null &
+        oarsh -n $h "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 > /tmp/worker.log 2>&1 &" &
     done
     wait
     sleep 3
@@ -230,12 +228,12 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
             # Split file
             split -n $num_workers -d "$INPUT_FILE" "$TEST_DIR/calc_part_"
 
-            # Copier partitions vers workers AVANT la mesure
+            # Copier partitions vers workers AVANT la mesure - utilise oarcp
             i=0
             for h in $WORKERS; do
                 PART_FILE="$TEST_DIR/calc_part_$(printf '%02d' $i)"
                 if [ -f "$PART_FILE" ]; then
-                    scp -o StrictHostKeyChecking=no "$PART_FILE" "$h:/tmp/part.txt" 2>/dev/null &
+                    oarcp "$PART_FILE" $h:/tmp/part.txt 2>/dev/null &
                 fi
                 i=$((i + 1))
             done
@@ -245,9 +243,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
             START_TIME=$(date +%s%N)
 
             for h in $WORKERS; do
-                ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h \
-                    "cat /tmp/part.txt | tr ' ' '\n' | tr -s '\n' | sort | uniq -c > /tmp/result.txt" \
-                    </dev/null 2>/dev/null &
+                oarsh -n $h "cat /tmp/part.txt | tr ' ' '\n' | tr -s '\n' | sort | uniq -c > /tmp/result.txt" &
             done
             wait
 
@@ -263,7 +259,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
 
     # Arrêter workers
     for h in $WORKERS; do
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
+        oarsh -n $h "pkill -f WorkerNode" 2>/dev/null &
     done
     wait
 done
@@ -290,9 +286,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
     echo "  Préparation résultats sur $num_workers workers..."
     i=0
     for h in $WORKERS; do
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h \
-            "for j in \$(seq 1 1000); do echo \"\$j word_\$j\"; done > /tmp/result.txt" \
-            </dev/null 2>/dev/null &
+        oarsh -n $h "for j in \$(seq 1 1000); do echo \"\$j word_\$j\"; done > /tmp/result.txt" &
         i=$((i + 1))
     done
     wait
@@ -304,10 +298,10 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
 
         START_TIME=$(date +%s%N)
 
-        # 1. FETCH: Récupérer résultats depuis tous les workers (parallèle)
+        # 1. FETCH: Récupérer résultats depuis tous les workers (parallèle) - utilise oarcp
         i=0
         for h in $WORKERS; do
-            scp -o StrictHostKeyChecking=no "$h:/tmp/result.txt" "$TEST_DIR/merge_tmp/count_$i.txt" 2>/dev/null &
+            oarcp $h:/tmp/result.txt "$TEST_DIR/merge_tmp/count_$i.txt" 2>/dev/null &
             i=$((i + 1))
         done
         wait
