@@ -306,8 +306,8 @@ def plot_total_model(all_results, output_dir):
     T_rmi = 0.05  # secondes - constant (appels parallèles!)
     C_merge = 0.02  # secondes - constant
 
-    workers = np.array([1, 2, 4, 8, 16, 32])
-    sizes = [100, 500, 1000]
+    workers = np.array([2, 3, 6, 8, 11, 13, 15, 18])
+    sizes = [10, 50, 100, 500, 1000]
 
     def V_eff(n):
         """Vitesse effective avec saturation NFS"""

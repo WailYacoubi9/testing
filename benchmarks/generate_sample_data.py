@@ -16,8 +16,8 @@ N_SAT = 8        # point de saturation
 T_OPEN = 5       # ms
 C_MERGE = 20     # ms
 
-# Configuration des tests
-WORKERS = [1, 2, 4, 8, 16]
+# Configuration des tests - WORKER COUNTS EXACTS
+WORKERS = [2, 3, 6, 8, 11, 13, 15, 18]
 SIZES_MB = [10, 50, 100, 500, 1000]
 RUNS = 3
 NOISE = 0.1  # 10% de bruit

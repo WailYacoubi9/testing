@@ -15,8 +15,8 @@ mkdir -p "$RESULTS_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 CSV_FILE="$RESULTS_DIR/t_init_$TIMESTAMP.csv"
 
-# Configuration
-WORKER_COUNTS=(1 2 4 8 16)
+# Configuration - WORKER COUNTS EXACTS
+WORKER_COUNTS=(2 3 6 8 11 13 15 18)
 RUNS=5
 
 # Vérification OAR

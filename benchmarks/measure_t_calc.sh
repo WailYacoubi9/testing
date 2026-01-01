@@ -15,9 +15,9 @@ mkdir -p "$RESULTS_DIR" "$TEST_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 CSV_FILE="$RESULTS_DIR/t_calc_$TIMESTAMP.csv"
 
-# Configuration
-WORKER_COUNTS=(1 2 4 8)
-SIZES_MB=(10 50 100)
+# Configuration - WORKER COUNTS EXACTS
+WORKER_COUNTS=(2 3 6 8 11 13 15 18)
+SIZES_MB=(10 50 100 500 1000)
 RUNS=3
 
 # Vérification OAR

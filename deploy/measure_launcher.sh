@@ -29,9 +29,9 @@ PARAMS_FILE="$RESULTS_DIR/launcher_params_$TIMESTAMP.txt"
 
 echo "run,num_workers,ssh_start_time,port_ready_time,rmi_connected_time,total_time_s,rmi_time_ms" > "$CSV_FILE"
 
-# Configuration academique - ajuste pour ecotype (17 noeuds = 16 workers max)
-WORKER_COUNTS=(1 2 4 8 16)     # Ajuste pour les noeuds disponibles
-RUNS=10                        # Reduit pour test initial (augmenter a 30 pour mesure finale)
+# Configuration - WORKER COUNTS EXACTS (19 noeuds = 18 workers max)
+WORKER_COUNTS=(2 3 6 8 11 13 15 18)
+RUNS=5                         # 5 repetitions par configuration
 
 # Ce script mesure le VRAI temps de lancement:
 # 1. SSH + demarrage JVM (ssh ... java WorkerNode)

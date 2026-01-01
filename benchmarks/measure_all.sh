@@ -17,8 +17,8 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 mkdir -p "$RESULTS_DIR"
 
-# Paramètres de test
-WORKER_COUNTS=(1 2 4 8 16)
+# Paramètres de test - CONFIGURATION EXACTE
+WORKER_COUNTS=(2 3 6 8 11 13 15 18)
 FILE_SIZES_MB=(10 50 100 500 1000)
 RUNS=3
 
