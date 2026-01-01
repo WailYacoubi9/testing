@@ -31,7 +31,7 @@ echo "run,num_workers,ssh_start_time,port_ready_time,rmi_connected_time,total_ti
 sync
 
 # Configuration rapide - 3 points suffisent pour regression lineaire
-WORKER_COUNTS=(1 4 16)         # 3 points pour regression
+WORKER_COUNTS=(1 2 4)          # 3 points pour regression
 RUNS=5                         # 5 repetitions pour moyenne
 
 # Ce script mesure le VRAI temps de lancement:
