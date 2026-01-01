@@ -111,8 +111,8 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
     WORKERS=$(echo "$ALL_NODES" | tail -n +2 | head -n $num_workers)
 
     for run in $(seq 1 $RUNS); do
-        # Afficher progression (chaque run pour debug)
-        echo -n "  Run $run/$RUNS: "
+        # Afficher progression
+        echo "  Run $run/$RUNS: starting..."
 
         # Nettoyer les workers precedents
         for hostname in $WORKERS; do
@@ -149,10 +149,10 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         PORT_READY_TIME=$(date +%s.%N)
 
         if [ "$all_ready" = false ]; then
-            echo "TIMEOUT"
+            echo "    TIMEOUT"
             continue
         fi
-        echo -n "workers ready, "
+        echo "    workers ready, testing RMI..."
 
         # ===========================================
         # MESURE RMI REELLE: Naming.lookup + executeCommand
@@ -171,10 +171,10 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         # Extraire le temps RMI en ms
         if [ -n "$RMI_OUTPUT" ]; then
             RMI_TIME_MS=$(echo "$RMI_OUTPUT" | cut -d',' -f3)
-            echo "RMI OK (${RMI_TIME_MS}ms)"
+            echo "    RMI OK (${RMI_TIME_MS}ms) ✓"
         else
             RMI_TIME_MS="0"
-            echo "RMI FAILED"
+            echo "    RMI FAILED ✗"
         fi
 
         # Calculer le temps total (SSH start -> RMI connected)
