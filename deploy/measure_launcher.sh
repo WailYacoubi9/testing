@@ -28,6 +28,7 @@ STATS_FILE="$RESULTS_DIR/launcher_stats_$TIMESTAMP.csv"
 PARAMS_FILE="$RESULTS_DIR/launcher_params_$TIMESTAMP.txt"
 
 echo "run,num_workers,ssh_start_time,port_ready_time,rmi_connected_time,total_time_s,rmi_time_ms" > "$CSV_FILE"
+sync
 
 # Configuration academique - ajuste pour ecotype (17 noeuds = 16 workers max)
 WORKER_COUNTS=(1 2 4 8 16)     # Ajuste pour les noeuds disponibles
@@ -179,8 +180,9 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         # Calculer le temps total (SSH start -> RMI connected)
         TOTAL_TIME=$(echo "$RMI_CONNECTED_TIME - $START_TIME" | bc)
 
-        # Ecrire dans CSV
+        # Ecrire dans CSV (sync force le flush sur disque)
         echo "$run,$num_workers,$START_TIME,$PORT_READY_TIME,$RMI_CONNECTED_TIME,$TOTAL_TIME,$RMI_TIME_MS" >> "$CSV_FILE"
+        sync
 
         # Nettoyer
         for hostname in $WORKERS; do
