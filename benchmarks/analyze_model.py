@@ -294,7 +294,7 @@ def plot_t_merge(results, output_dir):
 
 
 def plot_total_model(all_results, output_dir):
-    """Trace le modèle complet avec décomposition"""
+    """Trace le modèle complet avec décomposition - VERSION CORRIGÉE"""
     fig, axes = plt.subplots(2, 2, figsize=(14, 12))
 
     # Paramètres du modèle
@@ -302,12 +302,16 @@ def plot_total_model(all_results, output_dir):
     beta = all_results.get('t_init', {}).get('beta', 1.0)
     BW_write = all_results.get('t_split', {}).get('BW_write', 100)
     V_cpu = all_results.get('t_calc', {}).get('V_cpu', 50)
-    n_sat = all_results.get('t_calc', {}).get('n_sat', 8) or 8
-    T_open = all_results.get('t_merge', {}).get('T_open', 5) / 1000  # ms -> s
-    C_merge = all_results.get('t_merge', {}).get('C', 10) / 1000  # ms -> s
+    BW_nfs = 200  # MB/s - à calibrer
+    T_rmi = 0.05  # secondes - constant (appels parallèles!)
+    C_merge = 0.02  # secondes - constant
 
     workers = np.array([1, 2, 4, 8, 16, 32])
     sizes = [100, 500, 1000]
+
+    def V_eff(n):
+        """Vitesse effective avec saturation NFS"""
+        return np.minimum(V_cpu, BW_nfs / n)
 
     # 1. Décomposition par composante (S fixe)
     ax1 = axes[0, 0]
@@ -315,8 +319,8 @@ def plot_total_model(all_results, output_dir):
 
     t_init = alpha * workers + beta
     t_split = np.ones_like(workers, dtype=float) * (S / BW_write)
-    t_calc = S / (np.minimum(workers, n_sat) * V_cpu)
-    t_merge = T_open * workers + C_merge
+    t_calc = S / (workers * V_eff(workers)) + T_rmi  # CORRIGÉ: T_rmi constant
+    t_merge = np.ones_like(workers, dtype=float) * C_merge
 
     width = 0.6
     ax1.bar(workers, t_init, width, label='T_init', color=COLORS[0])
@@ -335,8 +339,8 @@ def plot_total_model(all_results, output_dir):
     for i, S in enumerate(sizes):
         t_init = alpha * workers + beta
         t_split = S / BW_write
-        t_calc = S / (np.minimum(workers, n_sat) * V_cpu)
-        t_merge = T_open * workers + C_merge
+        t_calc = S / (workers * V_eff(workers)) + T_rmi
+        t_merge = C_merge
         t_total = t_init + t_split + t_calc + t_merge
 
         ax2.plot(workers, t_total, 'o-', color=COLORS[i], markersize=8, label=f'{S} MB')
@@ -352,17 +356,23 @@ def plot_total_model(all_results, output_dir):
     for i, S in enumerate(sizes):
         t_init = alpha * workers + beta
         t_split = S / BW_write
-        t_calc = S / (np.minimum(workers, n_sat) * V_cpu)
-        t_merge = T_open * workers + C_merge
+        t_calc = S / (workers * V_eff(workers)) + T_rmi
+        t_merge = C_merge
         t_total = t_init + t_split + t_calc + t_merge
 
-        t_1 = alpha * 1 + beta + S / BW_write + S / V_cpu + T_open + C_merge
+        # T(1)
+        t_1 = alpha * 1 + beta + S / BW_write + S / V_cpu + T_rmi + C_merge
         speedup = t_1 / t_total
 
         ax3.plot(workers, speedup, 'o-', color=COLORS[i], markersize=8, label=f'{S} MB')
 
     ax3.plot(workers, workers, 'k--', alpha=0.5, label='Idéal')
-    ax3.axvline(x=n_sat, color='red', linestyle=':', label=f'Saturation n={n_sat}')
+
+    # Point de saturation: n_sat = BW_nfs / V_cpu
+    n_sat = BW_nfs / V_cpu
+    if n_sat < max(workers):
+        ax3.axvline(x=n_sat, color='red', linestyle=':', label=f'Saturation n≈{n_sat:.0f}')
+
     ax3.set_xlabel('Workers', fontsize=12)
     ax3.set_ylabel('Speedup', fontsize=12)
     ax3.set_title('Speedup S(n) = T(1)/T(n)', fontsize=14)
@@ -374,11 +384,11 @@ def plot_total_model(all_results, output_dir):
     for i, S in enumerate(sizes):
         t_init = alpha * workers + beta
         t_split = S / BW_write
-        t_calc = S / (np.minimum(workers, n_sat) * V_cpu)
-        t_merge = T_open * workers + C_merge
+        t_calc = S / (workers * V_eff(workers)) + T_rmi
+        t_merge = C_merge
         t_total = t_init + t_split + t_calc + t_merge
 
-        t_1 = alpha * 1 + beta + S / BW_write + S / V_cpu + T_open + C_merge
+        t_1 = alpha * 1 + beta + S / BW_write + S / V_cpu + T_rmi + C_merge
         speedup = t_1 / t_total
         efficiency = speedup / workers * 100
 
