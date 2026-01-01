@@ -126,16 +126,19 @@ done
 echo "  ✓ T_init sauvegardé: $INIT_CSV"
 
 #=============================================================================
-# 2. MESURE T_split(S) - Temps de découpage
+# 2. MESURE T_split(S) - Temps de découpage + transfert
 #=============================================================================
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo "[2/4] MESURE T_split(S) = S / BW_write"
+echo "[2/4] MESURE T_split(S) = S / BW_write (split + transfert)"
 echo "═══════════════════════════════════════════════════════════════"
 
 # Créer répertoire de test
 TEST_DIR="$PROJECT_DIR/benchmark_data"
 mkdir -p "$TEST_DIR"
+
+# Utiliser 8 workers pour le test de split
+SPLIT_WORKERS=$(echo "$ALL_NODES" | tail -n +2 | head -n 8)
 
 for size_mb in "${FILE_SIZES_MB[@]}"; do
     # Générer fichier de test
@@ -147,8 +150,19 @@ for size_mb in "${FILE_SIZES_MB[@]}"; do
 
         START_TIME=$(date +%s%N)
 
-        # Simuler split en 8 partitions
+        # Split en 8 partitions
         split -n 8 -d "$TEST_DIR/input_${size_mb}mb.txt" "$TEST_DIR/part_"
+
+        # Transfert vers workers (parallèle)
+        i=0
+        for h in $SPLIT_WORKERS; do
+            PART="$TEST_DIR/part_$(printf '%02d' $i)"
+            if [ -f "$PART" ]; then
+                scp -o StrictHostKeyChecking=no "$PART" "$h:/tmp/split_part.txt" 2>/dev/null &
+            fi
+            i=$((i + 1))
+        done
+        wait
 
         END_TIME=$(date +%s%N)
         DURATION_MS=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000" | bc)
@@ -207,19 +221,24 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
             # Split file
             split -n $num_workers -d "$INPUT_FILE" "$TEST_DIR/calc_part_"
 
-            START_TIME=$(date +%s%N)
-
-            # Lancer wordcount sur chaque worker
+            # Copier partitions vers workers AVANT la mesure
             i=0
             for h in $WORKERS; do
                 PART_FILE="$TEST_DIR/calc_part_$(printf '%02d' $i)"
                 if [ -f "$PART_FILE" ]; then
-                    # Copier partition vers worker et exécuter wordcount
-                    scp -o StrictHostKeyChecking=no "$PART_FILE" "$h:/tmp/part.txt" 2>/dev/null
-                    ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h \
-                        "wc -w /tmp/part.txt > /tmp/result.txt" </dev/null 2>/dev/null &
+                    scp -o StrictHostKeyChecking=no "$PART_FILE" "$h:/tmp/part.txt" 2>/dev/null &
                 fi
                 i=$((i + 1))
+            done
+            wait
+
+            # Mesurer UNIQUEMENT le calcul
+            START_TIME=$(date +%s%N)
+
+            for h in $WORKERS; do
+                ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h \
+                    "cat /tmp/part.txt | tr ' ' '\n' | tr -s '\n' | sort | uniq -c > /tmp/result.txt" \
+                    </dev/null 2>/dev/null &
             done
             wait
 
