@@ -86,7 +86,7 @@ for i in "${!WORKERS[@]}"; do
     echo "  Starting worker $((i+1))/$NUM_WORKERS on $WORKER_NODE:$WORKER_PORT..."
     
     # SSH to worker and start java process
-    ssh -n "$WORKER_NODE" "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $WORKER_NODE $WORKER_PORT > /tmp/worker_$i.log 2>&1 &" &
+    oarsh -n "$WORKER_NODE" "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $WORKER_NODE $WORKER_PORT > /tmp/worker_$i.log 2>&1 &" &
     
     WORKER_PIDS+=($!)
 done
@@ -207,7 +207,7 @@ for i in "${!WORKERS[@]}"; do
     WORKER_NODE=${WORKERS[$i]}
     WORKER_PORT=$((RMI_PORT + i))
     
-    ssh -n "$WORKER_NODE" "pkill -f 'java.*network.worker.WorkerNode.*$WORKER_PORT' 2>/dev/null || true" &
+    oarsh -n "$WORKER_NODE" "pkill -f 'java.*network.worker.WorkerNode.*$WORKER_PORT' 2>/dev/null || true" &
 done
 
 wait

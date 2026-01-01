@@ -133,7 +133,7 @@ echo "📦 Copying common files (bin, wordcount, test) to all workers..."
 for hostname in $HOSTNAMES; do
     if [ "$hostname" != "$MASTER_NODE" ]; then
         echo "  - Copying common files to $hostname..."
-        if ! scp -q -r bin wordcount test Makefile.generated $hostname:~ ; then
+        if ! oarcp -r bin wordcount test Makefile.generated $hostname:~ ; then
             echo "❌ Failed to copy files to $hostname"
             exit 1
         fi
@@ -155,7 +155,7 @@ for part_file in part*.txt; do
     fi
     
     echo "  - Sending $part_file → $worker"
-    if ! scp -q "$part_file" "$worker:~/" ; then
+    if ! oarcp "$part_file" "$worker:~/" ; then
         echo "❌ Failed to copy $part_file to $worker"
         exit 1
     fi
@@ -171,7 +171,7 @@ for hostname in $HOSTNAMES; do
     if [ "$hostname" != "$MASTER_NODE" ]; then
         echo "  - Starting worker on $hostname..."
         # Use absolute path with nohup and background the SSH
-        ssh $hostname "nohup java -cp ~/bin network.worker.WorkerNode $hostname 3000 > ~/worker.log 2>&1 &" &
+        oarsh -n $hostname "nohup java -cp ~/bin network.worker.WorkerNode $hostname 3000 > ~/worker.log 2>&1 &" &
     fi
 done
 
@@ -207,7 +207,7 @@ for hostname in $HOSTNAMES; do
         
         # Show worker log
         echo "    Worker log:"
-        ssh $hostname "tail -10 ~/worker.log 2>/dev/null || echo '(no log file)'" | sed 's/^/      /'
+        oarsh -n $hostname "tail -10 ~/worker.log 2>/dev/null || echo '(no log file)'" | sed 's/^/      /'
     fi
 done
 
@@ -267,7 +267,7 @@ echo ""
 echo "🛑 Stopping worker nodes..."
 for hostname in $HOSTNAMES; do
     if [ "$hostname" != "$MASTER_NODE" ]; then
-        ssh $hostname "pkill -f 'java.*WorkerNode'" 2>/dev/null || true
+        oarsh -n $hostname "pkill -f 'java.*WorkerNode'" 2>/dev/null || true
     fi
 done
 

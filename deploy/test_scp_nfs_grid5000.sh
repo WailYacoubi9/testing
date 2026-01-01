@@ -66,7 +66,7 @@ for SIZE in 10 50 100; do
     START_TIME=$(date +%s%N)
     
     for WORKER in "${WORKERS[@]}"; do
-        scp "$FILE" "$WORKER:/tmp/test_file.txt" > /dev/null 2>&1 &
+        oarcp "$FILE" "$WORKER:/tmp/test_file.txt" > /dev/null 2>&1 &
     done
     wait
     
@@ -79,7 +79,7 @@ for SIZE in 10 50 100; do
     
     # Cleanup
     for WORKER in "${WORKERS[@]}"; do
-        ssh "$WORKER" "rm -f /tmp/test_file.txt" 2>/dev/null &
+        oarsh -n "$WORKER" "rm -f /tmp/test_file.txt" 2>/dev/null &
     done
     wait
 done
@@ -110,7 +110,7 @@ for SIZE in 10 50 100; do
     START_TIME=$(date +%s%N)
     
     for WORKER in "${WORKERS[@]}"; do
-        ssh "$WORKER" "cat $FILE > /dev/null" > /dev/null 2>&1 &
+        oarsh -n "$WORKER" "cat $FILE > /dev/null" > /dev/null 2>&1 &
     done
     wait
     
@@ -128,7 +128,7 @@ echo "[4/5] Nettoyage..."
 
 rm -rf test_data
 for WORKER in "${WORKERS[@]}"; do
-    ssh "$WORKER" "rm -f /tmp/test_file.txt" 2>/dev/null &
+    oarsh -n "$WORKER" "rm -f /tmp/test_file.txt" 2>/dev/null &
 done
 wait
 

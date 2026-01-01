@@ -50,7 +50,7 @@ for n in "${WORKER_COUNTS[@]}"; do
     for run in $(seq 1 $RUNS); do
         # Cleanup parallèle
         for h in $WORKERS; do
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 \
+            oarsh -n -o ConnectTimeout=5 \
                 $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
         done
         wait
@@ -60,7 +60,7 @@ for n in "${WORKER_COUNTS[@]}"; do
         START=$(date +%s%N)
 
         for h in $WORKERS; do
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 \
+            oarsh -n -o ConnectTimeout=5 \
                 $h "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 </dev/null > /tmp/worker.log 2>&1 &" \
                 </dev/null 2>/dev/null &
         done
@@ -84,7 +84,7 @@ for n in "${WORKER_COUNTS[@]}"; do
 
         # Cleanup
         for h in $WORKERS; do
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
+            oarsh -n $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
         done
         wait
         sleep 1

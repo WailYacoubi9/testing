@@ -114,7 +114,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
 
         # Nettoyer les workers precedents
         for hostname in $WORKERS; do
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes $hostname "pkill -f WorkerNode 2>/dev/null" </dev/null 2>/dev/null || true
+            oarsh -n $hostname "pkill -f WorkerNode 2>/dev/null" </dev/null 2>/dev/null || true
         done
         sleep 1
 
@@ -122,7 +122,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         START_TIME=$(date +%s.%N)
 
         for hostname in $WORKERS; do
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes $hostname "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $hostname 3000 > /tmp/worker.log 2>&1 &" </dev/null 2>/dev/null
+            oarsh -n $hostname "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $hostname 3000 > /tmp/worker.log 2>&1 &" </dev/null 2>/dev/null
         done
 
         # Attendre que tous les workers soient prets (port 3000 ouvert)
@@ -131,7 +131,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
         while [ "$all_ready" = false ] && [ $timeout_counter -lt 60 ]; do
             ready_count=0
             for hostname in $WORKERS; do
-                if ssh -o StrictHostKeyChecking=no -o BatchMode=yes $hostname "netstat -ln 2>/dev/null | grep -q :3000" </dev/null 2>/dev/null; then
+                if oarsh -n $hostname "netstat -ln 2>/dev/null | grep -q :3000" </dev/null 2>/dev/null; then
                     ready_count=$((ready_count + 1))
                 fi
             done
@@ -182,7 +182,7 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
 
         # Nettoyer
         for hostname in $WORKERS; do
-            ssh -o StrictHostKeyChecking=no -o BatchMode=yes $hostname "pkill -f WorkerNode 2>/dev/null" </dev/null 2>/dev/null || true
+            oarsh -n $hostname "pkill -f WorkerNode 2>/dev/null" </dev/null 2>/dev/null || true
         done
 
         sleep 1

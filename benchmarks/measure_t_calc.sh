@@ -56,13 +56,13 @@ for n in "${WORKER_COUNTS[@]}"; do
 
     # Démarrer workers
     for h in $WORKERS; do
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
+        oarsh -n $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
     done
     wait
     sleep 1
 
     for h in $WORKERS; do
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes \
+        oarsh -n \
             $h "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $h 3000 </dev/null > /tmp/worker.log 2>&1 &" \
             </dev/null 2>/dev/null &
     done
@@ -83,7 +83,7 @@ for n in "${WORKER_COUNTS[@]}"; do
             for h in $WORKERS; do
                 PART="$TEST_DIR/calc_part_$(printf '%02d' $i)"
                 if [ -f "$PART" ]; then
-                    scp -o StrictHostKeyChecking=no "$PART" "$h:/tmp/input_part.txt" 2>/dev/null &
+                    oarcp "$PART" "$h:/tmp/input_part.txt" 2>/dev/null &
                 fi
                 i=$((i + 1))
             done
@@ -93,7 +93,7 @@ for n in "${WORKER_COUNTS[@]}"; do
             START=$(date +%s%N)
 
             for h in $WORKERS; do
-                ssh -o StrictHostKeyChecking=no -o BatchMode=yes \
+                oarsh -n \
                     $h "cat /tmp/input_part.txt | tr ' ' '\n' | sort | uniq -c > /tmp/wordcount_result.txt" \
                     </dev/null 2>/dev/null &
             done
@@ -111,7 +111,7 @@ for n in "${WORKER_COUNTS[@]}"; do
 
     # Arrêter workers
     for h in $WORKERS; do
-        ssh -o StrictHostKeyChecking=no -o BatchMode=yes $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
+        oarsh -n $h "pkill -f WorkerNode" </dev/null 2>/dev/null &
     done
     wait
 done

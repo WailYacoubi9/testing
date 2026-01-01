@@ -70,8 +70,8 @@ MASTER=$(echo "$ALL_NODES" | head -n 1)
 ALL_WORKERS=$(echo "$ALL_NODES" | tail -n +2)
 
 for worker in $ALL_WORKERS; do
-    ssh $worker "pkill -f WorkerNode 2>/dev/null || true"
-    ssh $worker "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $worker 3000 > /tmp/worker.log 2>&1 &"
+    oarsh -n $worker "pkill -f WorkerNode 2>/dev/null || true"
+    oarsh -n $worker "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $worker 3000 > /tmp/worker.log 2>&1 &"
 done
 sleep 5
 
@@ -148,7 +148,7 @@ done
 echo ""
 echo "[Nettoyage] Arret des workers..."
 for worker in $ALL_WORKERS; do
-    ssh $worker "pkill -f WorkerNode 2>/dev/null" || true
+    oarsh -n $worker "pkill -f WorkerNode 2>/dev/null" || true
 done
 
 echo ""

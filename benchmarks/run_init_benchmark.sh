@@ -61,14 +61,14 @@ for num_workers in $(seq 1 $MAX_WORKERS); do
 
         # Nettoyer les workers precedents
         for worker in $WORKERS; do
-            ssh $worker "pkill -f WorkerNode 2>/dev/null" || true
+            oarsh -n $worker "pkill -f WorkerNode 2>/dev/null" || true
         done
         sleep 1
 
         # Mesure 1: Temps SSH pour lancer les commandes
         START_SSH=$(date +%s.%N)
         for worker in $WORKERS; do
-            ssh $worker "echo ready" > /dev/null &
+            oarsh -n $worker "echo ready" > /dev/null &
         done
         wait
         END_SSH=$(date +%s.%N)
@@ -77,7 +77,7 @@ for num_workers in $(seq 1 $MAX_WORKERS); do
         # Mesure 2: Temps de demarrage JVM + Worker
         START_JVM=$(date +%s.%N)
         for worker in $WORKERS; do
-            ssh $worker "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $worker 3000 > /tmp/worker.log 2>&1 &"
+            oarsh -n $worker "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $worker 3000 > /tmp/worker.log 2>&1 &"
         done
         END_JVM=$(date +%s.%N)
         JVM_TIME=$(echo "$END_JVM - $START_JVM" | bc)
@@ -107,7 +107,7 @@ for num_workers in $(seq 1 $MAX_WORKERS); do
 
         # Nettoyer
         for worker in $WORKERS; do
-            ssh $worker "pkill -f WorkerNode 2>/dev/null" || true
+            oarsh -n $worker "pkill -f WorkerNode 2>/dev/null" || true
         done
     done
 done

@@ -50,7 +50,7 @@ for size_kb in "${SIZES_KB[@]}"; do
 done
 
 # Creer le repertoire distant
-ssh $TARGET_NODE "mkdir -p /tmp/transfer_benchmark"
+oarsh -n $TARGET_NODE "mkdir -p /tmp/transfer_benchmark"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
@@ -69,11 +69,11 @@ for size_kb in "${SIZES_KB[@]}"; do
 
     for run in $(seq 1 $RUNS); do
         # Nettoyer la destination
-        ssh $TARGET_NODE "rm -f /tmp/transfer_benchmark/test.bin" 2>/dev/null
+        oarsh -n $TARGET_NODE "rm -f /tmp/transfer_benchmark/test.bin" 2>/dev/null
 
         # Mesurer le transfert
         START=$(date +%s.%N)
-        scp -q "$FILE" "$TARGET_NODE:/tmp/transfer_benchmark/test.bin"
+        oarcp -q "$FILE" "$TARGET_NODE:/tmp/transfer_benchmark/test.bin"
         END=$(date +%s.%N)
 
         TIME=$(echo "$END - $START" | bc)
@@ -106,7 +106,7 @@ for size_kb in "${SIZES_KB[@]}"; do
 
         # Mesurer l'acces depuis le worker
         START=$(date +%s.%N)
-        ssh $TARGET_NODE "cat $NFS_DIR/test.bin > /dev/null"
+        oarsh -n $TARGET_NODE "cat $NFS_DIR/test.bin > /dev/null"
         END=$(date +%s.%N)
 
         TIME=$(echo "$END - $START" | bc)
@@ -199,5 +199,5 @@ echo "  NFS stats: $NFS_STATS"
 echo "  Parametres: $PARAMS_FILE"
 
 # Nettoyage
-ssh $TARGET_NODE "rm -rf /tmp/transfer_benchmark" 2>/dev/null
+oarsh -n $TARGET_NODE "rm -rf /tmp/transfer_benchmark" 2>/dev/null
 rm -rf "$NFS_DIR"

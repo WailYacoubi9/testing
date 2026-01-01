@@ -143,7 +143,7 @@ for lines in "${TEST_SIZES[@]}"; do
     LATENCY_START=$(date +%s%N)
     FIRST_WORKER=$(echo "$ALL_NODES" | head -n 1)
     
-    if timeout 5 scp -o ConnectTimeout=2 -o StrictHostKeyChecking=no \
+    if timeout 5 oarcp \
         "$INPUT" "$FIRST_WORKER:/tmp/test_scp_$lines.txt" 2>/dev/null; then
         LATENCY_END=$(date +%s%N)
         LATENCY_MS=$(echo "scale=2; ($LATENCY_END - $LATENCY_START) / 1000000" | bc)
@@ -159,7 +159,7 @@ for lines in "${TEST_SIZES[@]}"; do
     
     SUCCESSFUL_TRANSFERS=0
     for worker in $ALL_NODES; do
-        if timeout 10 scp -o ConnectTimeout=2 -o StrictHostKeyChecking=no \
+        if timeout 10 oarcp \
             "$INPUT" "$worker:/tmp/test_scp_$lines.txt" 2>/dev/null; then
             SUCCESSFUL_TRANSFERS=$((SUCCESSFUL_TRANSFERS + 1))
             echo -n "."

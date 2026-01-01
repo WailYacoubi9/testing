@@ -48,8 +48,8 @@ javac -d bin -sourcepath src $(find src -name "*.java") 2>/dev/null || {
 echo "[2/4] Demarrage des workers..."
 for worker in $WORKER_NODES; do
     echo "  -> Demarrage sur $worker..."
-    ssh $worker "pkill -f WorkerNode 2>/dev/null || true"
-    ssh $worker "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $worker 3000 > /tmp/worker.log 2>&1 &"
+    oarsh -n $worker "pkill -f WorkerNode 2>/dev/null || true"
+    oarsh -n $worker "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $worker 3000 > /tmp/worker.log 2>&1 &"
 done
 
 # Attendre que les workers soient prets
@@ -97,7 +97,7 @@ done
 echo ""
 echo "[Nettoyage] Arret des workers..."
 for worker in $WORKER_NODES; do
-    ssh $worker "pkill -f WorkerNode 2>/dev/null || true"
+    oarsh -n $worker "pkill -f WorkerNode 2>/dev/null || true"
 done
 
 # Afficher le resume
