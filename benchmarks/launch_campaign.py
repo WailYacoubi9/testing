@@ -23,7 +23,7 @@ def main():
         sys.exit(1)
 
     for nodes in NODE_COUNTS:
-        cmd = ["oarsub"]
+        cmd = ["/usr/bin/oarsub"]
 
         if TARGET_CLUSTER:
             cmd.extend(["-p", f"cluster='{TARGET_CLUSTER}'"])
