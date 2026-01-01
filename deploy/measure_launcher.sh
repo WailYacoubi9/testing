@@ -4,9 +4,6 @@
 # T_init(n) = alpha * n + beta
 #=============================================================================
 
-# Force immediate output
-exec > >(tee -a /tmp/measure_launcher.log) 2>&1
-
 PROJECT_DIR="${PROJECT_DIR:-$HOME/wordcount-distributed}"
 RESULTS_DIR="$PROJECT_DIR/launcher-results"
 mkdir -p "$RESULTS_DIR"
