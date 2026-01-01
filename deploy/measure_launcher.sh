@@ -30,9 +30,9 @@ PARAMS_FILE="$RESULTS_DIR/launcher_params_$TIMESTAMP.txt"
 echo "run,num_workers,ssh_start_time,port_ready_time,rmi_connected_time,total_time_s,rmi_time_ms" > "$CSV_FILE"
 sync
 
-# Configuration academique - ajuste pour ecotype (17 noeuds = 16 workers max)
-WORKER_COUNTS=(1 2 4 8 16)     # Ajuste pour les noeuds disponibles
-RUNS=10                        # Reduit pour test initial (augmenter a 30 pour mesure finale)
+# Configuration rapide - 3 points suffisent pour regression lineaire
+WORKER_COUNTS=(1 4 16)         # 3 points pour regression
+RUNS=5                         # 5 repetitions pour moyenne
 
 # Ce script mesure le VRAI temps de lancement:
 # 1. SSH + demarrage JVM (ssh ... java WorkerNode)
@@ -116,15 +116,15 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
 
         # Nettoyer les workers precedents
         for hostname in $WORKERS; do
-            ssh $hostname "pkill -f WorkerNode 2>/dev/null" || true
+            ssh $hostname "pkill -f WorkerNode 2>/dev/null" </dev/null || true
         done
-        sleep 1
+        sleep 0.5
 
         # Mesure: Demarrage des workers
         START_TIME=$(date +%s.%N)
 
         for hostname in $WORKERS; do
-            ssh $hostname "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $hostname 3000 > /tmp/worker.log 2>&1 &"
+            ssh $hostname "cd $PROJECT_DIR && nohup java -cp bin network.worker.WorkerNode $hostname 3000 > /tmp/worker.log 2>&1 &" </dev/null
         done
 
         # Attendre que tous les workers soient prets (port 3000 ouvert)
@@ -186,10 +186,10 @@ for num_workers in "${WORKER_COUNTS[@]}"; do
 
         # Nettoyer
         for hostname in $WORKERS; do
-            ssh $hostname "pkill -f WorkerNode 2>/dev/null" || true
+            ssh $hostname "pkill -f WorkerNode 2>/dev/null" </dev/null || true
         done
 
-        sleep 1
+        sleep 0.5
     done
 done
 
